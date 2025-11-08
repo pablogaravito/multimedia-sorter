@@ -1,13 +1,13 @@
 package com.pablogb.multimediasorterapp.model;
 
-public class ImageInfo {
+public class MultimediaInfo {
     private String name;
     private String path;
     private long size;
 
-    public ImageInfo() {}
+    public MultimediaInfo() {}
 
-    public ImageInfo(String name, String path, long size) {
+    public MultimediaInfo(String name, String path, long size) {
         this.name = name;
         this.path = path;
         this.size = size;
