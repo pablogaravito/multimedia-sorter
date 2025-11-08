@@ -1,4 +1,4 @@
-package com.pablogb.multimedia_sorter;
+package com.pablogb.multimediasorterapp;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
