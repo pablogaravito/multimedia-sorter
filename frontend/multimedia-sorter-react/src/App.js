@@ -231,6 +231,17 @@ export default function MultimediaSorter() {
       });
       const result = await response.json();
       if (result.success) {
+        // Delete the session file since we're done
+        try {
+          await fetch(
+            `${API_BASE}/session?sourcePath=${encodeURIComponent(sourcePath)}`,
+            {
+              method: "DELETE",
+            }
+          );
+        } catch (e) {
+          console.log("Could not delete session file");
+        }
         alert(`Success!\n\n${result.message}`);
         showFeedback("All files processed successfully!", 3000);
       } else {
@@ -349,7 +360,7 @@ export default function MultimediaSorter() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-4xl font-bold mb-2 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          Image Sorter Pro
+          Multimedia Sorter Pro
         </h1>
         <p className="text-center text-slate-400 mb-8">
           Organize recovered images with Java backend + hash verification

@@ -83,6 +83,16 @@ public class MultimediaSorterController {
         }
     }
 
+    @DeleteMapping("/session")
+    public ResponseEntity<Void> deleteSession(@RequestParam String sourcePath) {
+        try {
+            service.deleteSession(sourcePath);
+            return ResponseEntity.ok().build();
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     @GetMapping("/folders")
     public ResponseEntity<List<String>> getFolders(@RequestParam String path) {
         try {

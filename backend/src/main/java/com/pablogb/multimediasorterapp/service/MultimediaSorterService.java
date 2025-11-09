@@ -185,6 +185,13 @@ public class MultimediaSorterService {
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(sessionFile.toFile(), session);
     }
 
+    public void deleteSession(String sourcePath) throws IOException {
+        Path sessionFile = getSessionFilePath(sourcePath);
+        if (Files.exists(sessionFile)) {
+            Files.delete(sessionFile);
+        }
+    }
+
     private Path getSessionFilePath(String sourcePath) {
         String userHome = System.getProperty("user.home");
         Path sessionDir = Paths.get(userHome, ".imagesorter", "sessions");
