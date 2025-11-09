@@ -7,10 +7,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,6 +16,8 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 
+@RestController
+@RequestMapping("/api")
 public class MultimediaSorterController {
 
     @Autowired
@@ -44,7 +43,6 @@ public class MultimediaSorterController {
 
             Resource resource = new FileSystemResource(imagePath);
             String contentType = Files.probeContentType(imagePath);
-
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(contentType != null ? contentType : "image/jpeg"))
                     .body(resource);
