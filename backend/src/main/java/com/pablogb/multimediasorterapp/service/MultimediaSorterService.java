@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pablogb.multimediasorterapp.model.*;
 import org.springframework.stereotype.Service;
 
+import java.awt.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,6 +13,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -251,5 +253,22 @@ public class MultimediaSorterService {
         String userHome = System.getProperty("user.home");
         Path configDir = Paths.get(userHome, ".imagesorter");
         return configDir.resolve("destinations.json");
+    }
+
+    public void openFileInDefaultApp(String filePath) throws IOException {
+        Path path = Paths.get(filePath);
+
+        if (!Files.exists(path)) {
+            throw new IOException("File not found");
+        }
+
+        // Force non-headless mode
+        System.setProperty("java.awt.headless", "false");
+
+        if (!Desktop.isDesktopSupported()) {
+            throw new IOException("Desktop operations not supported on this system");
+        }
+
+        Desktop.getDesktop().open(path.toFile());
     }
 }

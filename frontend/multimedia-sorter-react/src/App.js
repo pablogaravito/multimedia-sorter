@@ -163,6 +163,18 @@ export default function MultimediaSorter() {
     showFeedback("Destination removed");
   };
 
+  const openImageInDefaultApp = async () => {
+    if (!currentImage) return;
+    try {
+      await fetch(
+        `${API_BASE}/open-file?path=${encodeURIComponent(currentImage.path)}`
+      );
+      showFeedback("Opened in default app");
+    } catch (error) {
+      showFeedback("Could not open file", 3000);
+    }
+  };
+
   const classifyImage = (destName) => {
     if (currentIndex >= images.length) return;
     const image = images[currentIndex];
@@ -545,6 +557,12 @@ export default function MultimediaSorter() {
                 </div>
                 <div className="flex justify-between items-center">
                   <p className="text-slate-400">{currentImage.name}</p>
+                  <button
+                    onClick={openImageInDefaultApp}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition"
+                  >
+                    Open in App
+                  </button>
                   {zoom > 1 && (
                     <p className="text-sm text-blue-400">
                       Zoom: {Math.round(zoom * 100)}% • Drag to pan

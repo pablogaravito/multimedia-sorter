@@ -128,4 +128,14 @@ public class MultimediaSorterController {
             return ResponseEntity.badRequest().build();
         }
     }
+
+    @GetMapping("/open-file")
+    public ResponseEntity<String> openFile(@RequestParam String path) {
+        try {
+            service.openFileInDefaultApp(path);
+            return ResponseEntity.ok("File opened successfully");
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+        }
+    }
 }
