@@ -1,10 +1,14 @@
 package com.pablogb.multimediasorterapp.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.kokorin.jaffree.ffprobe.FFprobe;
+import com.github.kokorin.jaffree.ffprobe.FFprobeResult;
 import com.pablogb.multimediasorterapp.model.*;
 import org.springframework.stereotype.Service;
 
+import javax.imageio.ImageIO;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,7 +19,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+
+import com.github.kokorin.jaffree.ffprobe.Stream;
 
 @Service
 public class MultimediaSorterService {
@@ -25,28 +30,32 @@ public class MultimediaSorterService {
             ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".svg"
     );
 
+    private static final Set<String> VIDEO_EXTENSIONS = Set.of(
+            ".mp4", ".avi", ".mov", ".webm", ".mkv", ".flv", ".wmv", ".m4v"
+    );
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public List<MultimediaInfo> getImagesFromDirectory(String sourcePath) throws IOException {
+    public List<MultimediaInfo> getMultimediaFilesFromDirectory(String sourcePath) throws IOException {
         Path path = Paths.get(sourcePath);
-
         if (!Files.exists(path) || !Files.isDirectory(path)) {
             throw new IOException("Invalid directory path");
         }
 
-        try (Stream<Path> paths = Files.walk(path, 1)) {
+        try (java.util.stream.Stream<Path> paths = Files.walk(path, 1)) {
             return paths
                     .filter(Files::isRegularFile)
-                    .filter(this::isImageFile)
+                    .filter(this::isMediaFile)  // Changed from isImageFile
                     .map(this::createMultimediaInfo)
                     .sorted(Comparator.comparing(MultimediaInfo::getName))
                     .collect(Collectors.toList());
         }
     }
 
-    private boolean isImageFile(Path path) {
+    private boolean isMediaFile(Path path) {
         String fileName = path.getFileName().toString().toLowerCase();
-        return IMAGE_EXTENSIONS.stream().anyMatch(fileName::endsWith);
+        return IMAGE_EXTENSIONS.stream().anyMatch(fileName::endsWith) ||
+                VIDEO_EXTENSIONS.stream().anyMatch(fileName::endsWith);
     }
 
     private MultimediaInfo createMultimediaInfo(Path path) {
@@ -61,7 +70,77 @@ public class MultimediaSorterService {
         }
     }
 
-    public SortResult sortImages(SortRequest request) throws Exception {
+    public MultimediaMetadata getMediaMetadata(String filePath) throws IOException {
+        Path path = Paths.get(filePath);
+
+        if (!Files.exists(path)) {
+            throw new IOException("File not found");
+        }
+
+        long size = Files.size(path);
+        String fileName = path.getFileName().toString().toLowerCase();
+
+        // Check if it's a video
+        if (VIDEO_EXTENSIONS.stream().anyMatch(fileName::endsWith)) {
+            return getVideoMetadata(path, size);
+        } else {
+            return getImageMetadata(path, size);
+        }
+    }
+
+    private MultimediaMetadata getImageMetadata(Path path, long size) {
+        Integer width = null;
+        Integer height = null;
+
+        try {
+            BufferedImage image = ImageIO.read(path.toFile());
+            if (image != null) {
+                width = image.getWidth();
+                height = image.getHeight();
+            }
+        } catch (Exception e) {
+            // If we can't read dimensions, just return what we have
+        }
+
+        return new MultimediaMetadata(size, width, height, null, "image");
+    }
+
+    private MultimediaMetadata getVideoMetadata(Path path, long size) {
+        Integer width = null;
+        Integer height = null;
+        Float duration = null;
+
+        try {
+            FFprobeResult result = FFprobe.atPath()
+                    .setShowStreams(true)
+                    .setInput(path)
+                    .execute();
+
+            // Get video stream info
+            Stream videoStream = result.getStreams().stream()
+                    .filter(s -> "video".equals(s.getCodecType()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (videoStream != null) {
+                width = videoStream.getWidth();
+                height = videoStream.getHeight();
+            }
+
+            // Get duration from format
+            if (result.getFormat() != null && result.getFormat().getDuration() != null) {
+                duration = result.getFormat().getDuration();
+            }
+
+        } catch (Exception e) {
+            // If FFprobe fails, just return file size
+            System.err.println("Could not read video metadata: " + e.getMessage());
+        }
+
+        return new MultimediaMetadata(size, width, height, duration, "video");
+    }
+
+    public SortResult sortMedia(SortRequest request) throws Exception {
         int copied = 0;
         int skipped = 0;
         int failed = 0;
@@ -211,7 +290,7 @@ public class MultimediaSorterService {
             return Collections.emptyList();
         }
 
-        try (Stream<Path> paths = Files.list(dirPath)) {
+        try (java.util.stream.Stream<Path> paths = Files.list(dirPath)) {
             return paths
                     .filter(Files::isDirectory)
                     .map(p -> p.toAbsolutePath().toString())

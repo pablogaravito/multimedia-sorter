@@ -12,7 +12,7 @@ import {
 
 const API_BASE = "http://localhost:8080/api";
 
-export default function MultimediaSorter() {
+export default function ImageSorter() {
   const [sourcePath, setSourcePath] = useState("");
   const [images, setImages] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -30,6 +30,11 @@ export default function MultimediaSorter() {
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isMouseOverImage, setIsMouseOverImage] = useState(false);
+  const [buttonSize, setButtonSize] = useState("medium");
+  const [imageMetadata, setImageMetadata] = useState({});
+  const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+  const [isVideoMuted, setIsVideoMuted] = useState(true);
+  const [videoRef, setVideoRef] = useState(null);
 
   const showFeedback = (msg, duration = 2000) => {
     setFeedback(msg);
@@ -80,6 +85,23 @@ export default function MultimediaSorter() {
       const data = await response.json();
       setImages(data);
       showFeedback(`Loaded ${data.length} images`);
+
+      // Load metadata for all images
+      const metadata = {};
+      for (const img of data) {
+        try {
+          const metaResponse = await fetch(
+            `${API_BASE}/media-metadata?path=${encodeURIComponent(img.path)}`
+          );
+          if (metaResponse.ok) {
+            metadata[img.path] = await metaResponse.json();
+          }
+        } catch (e) {
+          console.error("Error loading metadata for", img.name);
+        }
+      }
+      setImageMetadata(metadata);
+
       await loadSession();
     } catch (error) {
       showFeedback("Error loading images: " + error.message, 4000);
@@ -163,16 +185,36 @@ export default function MultimediaSorter() {
     showFeedback("Destination removed");
   };
 
-  const openImageInDefaultApp = async () => {
+  const moveDestinationUp = (index) => {
+    if (index === 0) return;
+    const newDests = [...destinations];
+    [newDests[index - 1], newDests[index]] = [
+      newDests[index],
+      newDests[index - 1],
+    ];
+    setDestinations(newDests);
+    saveDestinationsToBackend(newDests);
+    showFeedback("Moved up");
+  };
+
+  const moveDestinationDown = (index) => {
+    if (index === destinations.length - 1) return;
+    const newDests = [...destinations];
+    [newDests[index], newDests[index + 1]] = [
+      newDests[index + 1],
+      newDests[index],
+    ];
+    setDestinations(newDests);
+    saveDestinationsToBackend(newDests);
+    showFeedback("Moved down");
+  };
+
+  const openImageInDefaultApp = () => {
     if (!currentImage) return;
-    try {
-      await fetch(
-        `${API_BASE}/open-file?path=${encodeURIComponent(currentImage.path)}`
-      );
-      showFeedback("Opened in default app");
-    } catch (error) {
-      showFeedback("Could not open file", 3000);
-    }
+    window.open(
+      `${API_BASE}/open-file?path=${encodeURIComponent(currentImage.path)}`,
+      "_blank"
+    );
   };
 
   const classifyImage = (destName) => {
@@ -216,6 +258,8 @@ export default function MultimediaSorter() {
     setZoom(1);
     setImagePosition({ x: 0, y: 0 });
     setHasUnsavedChanges(false);
+    setIsVideoPlaying(true);
+    setIsVideoMuted(true);
     showFeedback("Ready for new session");
   };
 
@@ -254,6 +298,7 @@ export default function MultimediaSorter() {
         } catch (e) {
           console.log("Could not delete session file");
         }
+
         alert(`Success!\n\n${result.message}`);
         showFeedback("All files processed successfully!", 3000);
       } else {
@@ -308,6 +353,77 @@ export default function MultimediaSorter() {
   const progress =
     images.length > 0 ? ((currentIndex + 1) / images.length) * 100 : 0;
   const classifiedCount = Object.keys(classifications).length;
+  const currentMetadata = currentImage
+    ? imageMetadata[currentImage.path]
+    : null;
+
+  const getButtonSizeClasses = () => {
+    switch (buttonSize) {
+      case "small":
+        return "p-2 text-sm";
+      case "large":
+        return "p-6 text-base";
+      default:
+        return "p-4 text-base";
+    }
+  };
+
+  const getButtonKeyClasses = () => {
+    switch (buttonSize) {
+      case "small":
+        return "text-lg";
+      case "large":
+        return "text-3xl";
+      default:
+        return "text-2xl";
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return "Unknown";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  const isVideoFile = (filename) => {
+    const videoExtensions = [
+      ".mp4",
+      ".avi",
+      ".mov",
+      ".webm",
+      ".mkv",
+      ".flv",
+      ".wmv",
+      ".m4v",
+    ];
+    return videoExtensions.some((ext) => filename.toLowerCase().endsWith(ext));
+  };
+
+  const toggleVideoPlayPause = () => {
+    if (videoRef) {
+      if (isVideoPlaying) {
+        videoRef.pause();
+      } else {
+        videoRef.play();
+      }
+      setIsVideoPlaying(!isVideoPlaying);
+    }
+  };
+
+  const toggleVideoMute = () => {
+    if (videoRef) {
+      videoRef.muted = !isVideoMuted;
+      setIsVideoMuted(!isVideoMuted);
+    }
+  };
+
+  const formatVideoDuration = (seconds) => {
+    if (!seconds) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   // Global wheel event handler to prevent page scroll when over image
   useEffect(() => {
@@ -372,7 +488,7 @@ export default function MultimediaSorter() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-4xl font-bold mb-2 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          Multimedia Sorter Pro
+          Image Sorter Pro
         </h1>
         <p className="text-center text-slate-400 mb-8">
           Organize recovered images with Java backend + hash verification
@@ -409,7 +525,7 @@ export default function MultimediaSorter() {
               {images.length > 0 && (
                 <p className="mt-2 text-green-400 flex items-center gap-2">
                   <CheckCircle size={16} />
-                  {images.length} images loaded
+                  {images.length} files loaded
                 </p>
               )}
               {sessionLoaded && (
@@ -465,12 +581,30 @@ export default function MultimediaSorter() {
 
               {destinations.length > 0 && (
                 <div className="mt-4 space-y-2">
-                  {destinations.map((dest) => (
+                  {destinations.map((dest, index) => (
                     <div
                       key={dest.key}
-                      className="flex items-center justify-between p-3 bg-slate-700 rounded"
+                      className="flex items-center gap-2 p-3 bg-slate-700 rounded"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          onClick={() => moveDestinationUp(index)}
+                          disabled={index === 0}
+                          className="p-1 hover:bg-slate-600 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move up"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => moveDestinationDown(index)}
+                          disabled={index === destinations.length - 1}
+                          className="p-1 hover:bg-slate-600 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move down"
+                        >
+                          ▼
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-3 flex-1">
                         <span className="px-3 py-1 bg-slate-600 rounded font-mono font-bold">
                           {dest.key}
                         </span>
@@ -522,48 +656,126 @@ export default function MultimediaSorter() {
 
             {currentImage && (
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-                <div
-                  className="flex justify-center mb-4 overflow-hidden relative bg-slate-900 rounded"
-                  style={{
-                    height: "400px",
-                    cursor: zoom > 1 ? "grab" : "default",
-                  }}
-                  onWheel={handleImageWheel}
-                  onMouseEnter={() => setIsMouseOverImage(true)}
-                  onMouseLeave={() => setIsMouseOverImage(false)}
-                >
-                  <img
-                    src={`${API_BASE}/image?path=${encodeURIComponent(
-                      currentImage.path
-                    )}`}
-                    alt="Current"
-                    className="max-h-96 rounded object-contain select-none"
+                {isVideoFile(currentImage.name) ? (
+                  // Video Player
+                  <div className="space-y-3">
+                    <div
+                      className="flex justify-center mb-4 overflow-hidden relative bg-slate-900 rounded cursor-pointer"
+                      style={{ height: "400px" }}
+                      onClick={toggleVideoPlayPause}
+                    >
+                      <video
+                        ref={setVideoRef}
+                        src={`${API_BASE}/media?path=${encodeURIComponent(
+                          currentImage.path
+                        )}`}
+                        className="max-h-96 rounded object-contain select-none"
+                        autoPlay
+                        loop
+                        muted={isVideoMuted}
+                        style={{ maxWidth: "100%" }}
+                      />
+                      {!isVideoPlaying && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+                          <div className="w-20 h-20 flex items-center justify-center bg-black bg-opacity-60 rounded-full">
+                            <div className="w-0 h-0 border-t-[15px] border-t-transparent border-l-[25px] border-l-white border-b-[15px] border-b-transparent ml-2"></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 bg-slate-900 p-3 rounded">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleVideoPlayPause();
+                        }}
+                        className="p-2 hover:bg-slate-700 rounded transition"
+                      >
+                        {isVideoPlaying ? (
+                          <span className="text-white">⏸</span>
+                        ) : (
+                          <span className="text-white">▶</span>
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleVideoMute();
+                        }}
+                        className="p-2 hover:bg-slate-700 rounded transition"
+                      >
+                        {isVideoMuted ? (
+                          <span className="text-white">🔇</span>
+                        ) : (
+                          <span className="text-white">🔊</span>
+                        )}
+                      </button>
+                      <div className="flex-1 text-sm text-slate-400">
+                        Video • Looping{" "}
+                        {isVideoMuted ? "• Muted" : "• Sound On"}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Image Viewer with Zoom
+                  <div
+                    className="flex justify-center mb-4 overflow-hidden relative bg-slate-900 rounded"
                     style={{
-                      transform: `scale(${zoom}) translate(${
-                        imagePosition.x / zoom
-                      }px, ${imagePosition.y / zoom}px)`,
-                      transformOrigin: "center center",
-                      transition: "transform 0.1s ease-out",
+                      height: "400px",
                       cursor: zoom > 1 ? "grab" : "default",
                     }}
-                    onMouseDown={handleImageDrag}
-                    draggable={false}
-                  />
-                  {isMouseOverImage && (
-                    <div className="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
-                      Scroll to zoom
-                    </div>
-                  )}
-                </div>
-                <div className="flex justify-between items-center">
-                  <p className="text-slate-400">{currentImage.name}</p>
-                  <button
-                    onClick={openImageInDefaultApp}
-                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition"
+                    onWheel={handleImageWheel}
+                    onMouseEnter={() => setIsMouseOverImage(true)}
+                    onMouseLeave={() => setIsMouseOverImage(false)}
                   >
-                    Open in App
-                  </button>
-                  {zoom > 1 && (
+                    <img
+                      src={`${API_BASE}/media?path=${encodeURIComponent(
+                        currentImage.path
+                      )}`}
+                      alt="Current"
+                      className="max-h-96 rounded object-contain select-none"
+                      style={{
+                        transform: `scale(${zoom}) translate(${
+                          imagePosition.x / zoom
+                        }px, ${imagePosition.y / zoom}px)`,
+                        transformOrigin: "center center",
+                        transition: "transform 0.1s ease-out",
+                        cursor: zoom > 1 ? "grab" : "default",
+                      }}
+                      onMouseDown={handleImageDrag}
+                      draggable={false}
+                    />
+                    {isMouseOverImage && (
+                      <div className="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
+                        Scroll to zoom
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-slate-400">{currentImage.name}</p>
+                      {currentMetadata && (
+                        <p className="text-sm text-slate-500">
+                          {formatFileSize(currentMetadata.size)}
+                          {currentMetadata.width > 0 &&
+                            ` • ${currentMetadata.width} × ${currentMetadata.height}`}
+                          {currentMetadata.duration &&
+                            ` • ${formatVideoDuration(
+                              currentMetadata.duration
+                            )}`}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={openImageInDefaultApp}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition"
+                    >
+                      Open in App
+                    </button>
+                  </div>
+                  {zoom > 1 && !isVideoFile(currentImage.name) && (
                     <p className="text-sm text-blue-400">
                       Zoom: {Math.round(zoom * 100)}% • Drag to pan
                     </p>
@@ -572,18 +784,57 @@ export default function MultimediaSorter() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {destinations.map((dest) => (
-                <button
-                  key={dest.key}
-                  onClick={() => classifyImage(dest.name)}
-                  disabled={processing}
-                  className="p-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 rounded-lg font-semibold transition flex flex-col items-center gap-1"
-                >
-                  <span className="text-2xl font-mono">{dest.key}</span>
-                  <span className="text-sm">{dest.name}</span>
-                </button>
-              ))}
+            <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold">Quick Access Buttons</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setButtonSize("small")}
+                    className={`px-3 py-1 rounded text-sm ${
+                      buttonSize === "small"
+                        ? "bg-blue-600"
+                        : "bg-slate-700 hover:bg-slate-600"
+                    }`}
+                  >
+                    Small
+                  </button>
+                  <button
+                    onClick={() => setButtonSize("medium")}
+                    className={`px-3 py-1 rounded text-sm ${
+                      buttonSize === "medium"
+                        ? "bg-blue-600"
+                        : "bg-slate-700 hover:bg-slate-600"
+                    }`}
+                  >
+                    Medium
+                  </button>
+                  <button
+                    onClick={() => setButtonSize("large")}
+                    className={`px-3 py-1 rounded text-sm ${
+                      buttonSize === "large"
+                        ? "bg-blue-600"
+                        : "bg-slate-700 hover:bg-slate-600"
+                    }`}
+                  >
+                    Large
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {destinations.map((dest) => (
+                  <button
+                    key={dest.key}
+                    onClick={() => classifyImage(dest.name)}
+                    disabled={processing}
+                    className={`${getButtonSizeClasses()} bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 rounded-lg font-semibold transition flex flex-col items-center gap-1`}
+                  >
+                    <span className={`${getButtonKeyClasses()} font-mono`}>
+                      {dest.key}
+                    </span>
+                    <span className="text-sm">{dest.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex gap-3">
@@ -674,11 +925,12 @@ export default function MultimediaSorter() {
               <h3 className="font-semibold mb-2">Keyboard Shortcuts:</h3>
               <ul className="text-sm text-slate-400 space-y-1">
                 <li>• Press letter key to classify to that folder</li>
-                <li>• Arrow Right or Space: Skip image</li>
+                <li>• Arrow Right or Space: Skip file</li>
                 <li>• Arrow Left: Go back</li>
                 <li>• Ctrl+S: Save progress manually</li>
                 <li>• Mouse wheel on image: Zoom in/out</li>
                 <li>• Drag image when zoomed: Pan around</li>
+                <li>• Click video: Play/Pause</li>
               </ul>
               <p className="text-xs text-slate-500 mt-2">
                 Auto-saves every 30 seconds (when changes are made)

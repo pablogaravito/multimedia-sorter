@@ -26,14 +26,14 @@ public class MultimediaSorterController {
     @GetMapping("/images")
     public ResponseEntity<List<MultimediaInfo>> getImages(@RequestParam String sourcePath) {
         try {
-            List<MultimediaInfo> images = service.getImagesFromDirectory(sourcePath);
+            List<MultimediaInfo> images = service.getMultimediaFilesFromDirectory(sourcePath);
             return ResponseEntity.ok(images);
         } catch (IOException e) {
             return ResponseEntity.badRequest().build();
         }
     }
 
-    @GetMapping("/image")
+    @GetMapping("/media")
     public ResponseEntity<Resource> getImage(@RequestParam String path) {
         try {
             Path imagePath = Paths.get(path);
@@ -51,10 +51,20 @@ public class MultimediaSorterController {
         }
     }
 
-    @PostMapping("/sort")
-    public ResponseEntity<SortResult> sortImages(@RequestBody SortRequest request) {
+    @GetMapping("/media-metadata")
+    public ResponseEntity<MultimediaMetadata> getMediaMetadata(@RequestParam String path) {
         try {
-            SortResult result = service.sortImages(request);
+            MultimediaMetadata metadata = service.getMediaMetadata(path);
+            return ResponseEntity.ok(metadata);
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/sort")
+    public ResponseEntity<SortResult> sortMedia(@RequestBody SortRequest request) {
+        try {
+            SortResult result = service.sortMedia(request);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(
