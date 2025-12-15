@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -34,7 +35,7 @@ public class MultimediaSorterController {
     }
 
     @GetMapping("/media")
-    public ResponseEntity<Resource> getImage(@RequestParam String path) {
+    public ResponseEntity<Resource> getMedia(@RequestParam String path) {
         try {
             Path imagePath = Paths.get(path);
             if (!Files.exists(imagePath)) {
@@ -133,6 +134,26 @@ public class MultimediaSorterController {
     public ResponseEntity<Void> saveDestinations(@RequestBody List<Destination> destinations) {
         try {
             service.saveDestinations(destinations);
+            return ResponseEntity.ok().build();
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/destination-lists")
+    public ResponseEntity<Map<String, List<Destination>>> getDestinationLists() {
+        try {
+            Map<String, List<Destination>> lists = service.loadDestinationLists();
+            return ResponseEntity.ok(lists);
+        } catch (IOException e) {
+            return ResponseEntity.ok(Collections.emptyMap());
+        }
+    }
+
+    @PostMapping("/destination-lists")
+    public ResponseEntity<Void> saveDestinationLists(@RequestBody Map<String, List<Destination>> lists) {
+        try {
+            service.saveDestinationLists(lists);
             return ResponseEntity.ok().build();
         } catch (IOException e) {
             return ResponseEntity.badRequest().build();

@@ -17,6 +17,9 @@ export default function ImageSorter() {
   const [images, setImages] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [destinations, setDestinations] = useState([]);
+  const [destinationLists, setDestinationLists] = useState({});
+  const [selectedListName, setSelectedListName] = useState("");
+  const [newListName, setNewListName] = useState("");
   const [classifications, setClassifications] = useState({});
   const [newDestName, setNewDestName] = useState("");
   const [newDestKey, setNewDestKey] = useState("");
@@ -209,12 +212,16 @@ export default function ImageSorter() {
     showFeedback("Moved down");
   };
 
-  const openImageInDefaultApp = () => {
+  const openImageInDefaultApp = async () => {
     if (!currentImage) return;
-    window.open(
-      `${API_BASE}/open-file?path=${encodeURIComponent(currentImage.path)}`,
-      "_blank"
-    );
+    try {
+      await fetch(
+        `${API_BASE}/open-file?path=${encodeURIComponent(currentImage.path)}`
+      );
+      showFeedback("Opened in default app");
+    } catch (error) {
+      showFeedback("Could not open file", 3000);
+    }
   };
 
   const classifyImage = (destName) => {
@@ -379,6 +386,17 @@ export default function ImageSorter() {
     }
   };
 
+  const getButtonGridClasses = () => {
+    switch (buttonSize) {
+      case "small":
+        return "grid-cols-4 md:grid-cols-8";
+      case "large":
+        return "grid-cols-2 md:grid-cols-4";
+      default:
+        return "grid-cols-3 md:grid-cols-6";
+    }
+  };
+
   const formatFileSize = (bytes) => {
     if (!bytes) return "Unknown";
     if (bytes < 1024) return bytes + " B";
@@ -525,7 +543,7 @@ export default function ImageSorter() {
               {images.length > 0 && (
                 <p className="mt-2 text-green-400 flex items-center gap-2">
                   <CheckCircle size={16} />
-                  {images.length} files loaded
+                  {images.length} images loaded
                 </p>
               )}
               {sessionLoaded && (
@@ -754,7 +772,7 @@ export default function ImageSorter() {
                 )}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <div>
+                    <div className="flex-1">
                       <p className="text-slate-400">{currentImage.name}</p>
                       {currentMetadata && (
                         <p className="text-sm text-slate-500">
@@ -768,18 +786,29 @@ export default function ImageSorter() {
                         </p>
                       )}
                     </div>
-                    <button
-                      onClick={openImageInDefaultApp}
-                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition"
+                    {zoom > 1 && !isVideoFile(currentImage.name) && (
+                      <div className="flex-1 text-center">
+                        <p className="text-sm text-blue-400">
+                          Zoom: {Math.round(zoom * 100)}%
+                        </p>
+                        <p className="text-xs text-blue-300">Drag to pan</p>
+                      </div>
+                    )}
+                    <div
+                      className={
+                        zoom > 1 && !isVideoFile(currentImage.name)
+                          ? "flex-1 flex justify-end"
+                          : ""
+                      }
                     >
-                      Open in App
-                    </button>
+                      <button
+                        onClick={openImageInDefaultApp}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition"
+                      >
+                        Open in App
+                      </button>
+                    </div>
                   </div>
-                  {zoom > 1 && !isVideoFile(currentImage.name) && (
-                    <p className="text-sm text-blue-400">
-                      Zoom: {Math.round(zoom * 100)}% • Drag to pan
-                    </p>
-                  )}
                 </div>
               </div>
             )}
@@ -820,7 +849,7 @@ export default function ImageSorter() {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className={`grid ${getButtonGridClasses()} gap-3`}>
                 {destinations.map((dest) => (
                   <button
                     key={dest.key}

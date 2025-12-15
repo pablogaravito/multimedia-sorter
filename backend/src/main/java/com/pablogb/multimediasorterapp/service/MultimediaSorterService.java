@@ -1,8 +1,12 @@
 package com.pablogb.multimediasorterapp.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.type.CollectionType;
+import com.fasterxml.jackson.databind.type.MapType;
+import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.github.kokorin.jaffree.ffprobe.FFprobe;
 import com.github.kokorin.jaffree.ffprobe.FFprobeResult;
+import com.github.kokorin.jaffree.ffprobe.Stream;
 import com.pablogb.multimediasorterapp.model.*;
 import org.springframework.stereotype.Service;
 
@@ -16,11 +20,9 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
-
-import com.github.kokorin.jaffree.ffprobe.Stream;
 
 @Service
 public class MultimediaSorterService {
@@ -326,6 +328,31 @@ public class MultimediaSorterService {
         Path configFile = getDestinationsConfigPath();
         Files.createDirectories(configFile.getParent());
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(configFile.toFile(), destinations);
+    }
+
+    public Map<String, List<Destination>> loadDestinationLists() throws IOException {
+        Path configFile = getDestinationListsConfigPath();
+        if (!Files.exists(configFile)) {
+            return new HashMap<>();
+        }
+
+        TypeFactory typeFactory = objectMapper.getTypeFactory();
+        CollectionType listType = typeFactory.constructCollectionType(List.class, Destination.class);
+        MapType mapType = typeFactory.constructMapType(HashMap.class, typeFactory.constructType(String.class), listType);
+
+        return objectMapper.readValue(configFile.toFile(), mapType);
+    }
+
+    public void saveDestinationLists(Map<String, List<Destination>> lists) throws IOException {
+        Path configFile = getDestinationListsConfigPath();
+        Files.createDirectories(configFile.getParent());
+        objectMapper.writerWithDefaultPrettyPrinter().writeValue(configFile.toFile(), lists);
+    }
+
+    private Path getDestinationListsConfigPath() {
+        String userHome = System.getProperty("user.home");
+        Path configDir = Paths.get(userHome, ".imagesorter");
+        return configDir.resolve("destination-lists.json");
     }
 
     private Path getDestinationsConfigPath() {
