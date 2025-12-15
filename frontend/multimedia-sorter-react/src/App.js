@@ -45,32 +45,38 @@ export default function ImageSorter() {
   };
 
   useEffect(() => {
-    loadSavedDestinations();
+    loadDestinationLists();
   }, []);
 
-  const loadSavedDestinations = async () => {
+  const loadDestinationLists = async () => {
     try {
-      const response = await fetch(`${API_BASE}/destinations`);
+      const response = await fetch(`${API_BASE}/destination-lists`);
       if (!response.ok) return;
       const data = await response.json();
-      if (data && data.length > 0) {
-        setDestinations(data);
-        showFeedback(`Loaded ${data.length} saved destinations`, 2000);
+      if (data && Object.keys(data).length > 0) {
+        setDestinationLists(data);
+        // Load last used list
+        const lastUsed = localStorage.getItem("lastUsedList");
+        if (lastUsed && data[lastUsed]) {
+          setSelectedListName(lastUsed);
+          setDestinations(data[lastUsed]);
+          showFeedback(`Loaded list: ${lastUsed}`, 2000);
+        }
       }
     } catch (error) {
-      console.error("Error loading destinations:", error);
+      console.error("Error loading destination lists:", error);
     }
   };
 
-  const saveDestinationsToBackend = async (dests) => {
+  const saveDestinationLists = async (lists) => {
     try {
-      await fetch(`${API_BASE}/destinations`, {
+      await fetch(`${API_BASE}/destination-lists`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dests),
+        body: JSON.stringify(lists),
       });
     } catch (error) {
-      console.error("Error saving destinations:", error);
+      console.error("Error saving destination lists:", error);
     }
   };
 
@@ -155,6 +161,10 @@ export default function ImageSorter() {
   };
 
   const addDestination = () => {
+    if (!selectedListName) {
+      showFeedback("Please select a destination list first");
+      return;
+    }
     if (!newDestName.trim() || !newDestKey.trim() || !newDestPath.trim()) {
       showFeedback("Please fill all fields");
       return;
@@ -169,7 +179,12 @@ export default function ImageSorter() {
       { name: newDestName, key, path: newDestPath },
     ];
     setDestinations(newDests);
-    saveDestinationsToBackend(newDests);
+
+    // Update the list
+    const updatedLists = { ...destinationLists, [selectedListName]: newDests };
+    setDestinationLists(updatedLists);
+    saveDestinationLists(updatedLists);
+
     setNewDestName("");
     setNewDestKey("");
     setNewDestPath("");
@@ -184,7 +199,12 @@ export default function ImageSorter() {
     if (!confirmed) return;
     const newDests = destinations.filter((d) => d.key !== key);
     setDestinations(newDests);
-    saveDestinationsToBackend(newDests);
+
+    // Update the list
+    const updatedLists = { ...destinationLists, [selectedListName]: newDests };
+    setDestinationLists(updatedLists);
+    saveDestinationLists(updatedLists);
+
     showFeedback("Destination removed");
   };
 
@@ -196,7 +216,12 @@ export default function ImageSorter() {
       newDests[index - 1],
     ];
     setDestinations(newDests);
-    saveDestinationsToBackend(newDests);
+
+    // Update the list
+    const updatedLists = { ...destinationLists, [selectedListName]: newDests };
+    setDestinationLists(updatedLists);
+    saveDestinationLists(updatedLists);
+
     showFeedback("Moved up");
   };
 
@@ -208,20 +233,67 @@ export default function ImageSorter() {
       newDests[index],
     ];
     setDestinations(newDests);
-    saveDestinationsToBackend(newDests);
+
+    // Update the list
+    const updatedLists = { ...destinationLists, [selectedListName]: newDests };
+    setDestinationLists(updatedLists);
+    saveDestinationLists(updatedLists);
+
     showFeedback("Moved down");
   };
 
-  const openImageInDefaultApp = async () => {
-    if (!currentImage) return;
-    try {
-      await fetch(
-        `${API_BASE}/open-file?path=${encodeURIComponent(currentImage.path)}`
-      );
-      showFeedback("Opened in default app");
-    } catch (error) {
-      showFeedback("Could not open file", 3000);
+  const createNewList = () => {
+    if (!newListName.trim()) {
+      showFeedback("Please enter a list name");
+      return;
     }
+    if (destinationLists[newListName]) {
+      showFeedback("List name already exists");
+      return;
+    }
+    const updatedLists = { ...destinationLists, [newListName]: [] };
+    setDestinationLists(updatedLists);
+    setSelectedListName(newListName);
+    setDestinations([]);
+    saveDestinationLists(updatedLists);
+    localStorage.setItem("lastUsedList", newListName);
+    setNewListName("");
+    showFeedback(`Created list: ${newListName}`);
+  };
+
+  const selectList = (listName) => {
+    setSelectedListName(listName);
+    setDestinations(destinationLists[listName] || []);
+    localStorage.setItem("lastUsedList", listName);
+    showFeedback(`Selected list: ${listName}`);
+  };
+
+  const deleteList = (listName) => {
+    const confirmed = window.confirm(
+      `Delete list "${listName}"?\n\nThis will remove all destinations in this list. This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const updatedLists = { ...destinationLists };
+    delete updatedLists[listName];
+    setDestinationLists(updatedLists);
+    saveDestinationLists(updatedLists);
+
+    if (selectedListName === listName) {
+      setSelectedListName("");
+      setDestinations([]);
+      localStorage.removeItem("lastUsedList");
+    }
+
+    showFeedback("List deleted");
+  };
+
+  const openImageInDefaultApp = () => {
+    if (!currentImage) return;
+    window.open(
+      `${API_BASE}/open-file?path=${encodeURIComponent(currentImage.path)}`,
+      "_blank"
+    );
   };
 
   const classifyImage = (destName) => {
@@ -558,10 +630,86 @@ export default function ImageSorter() {
             <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
               <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
                 <FolderPlus size={20} />
-                2. Destination Folders
-                {destinations.length > 0 && (
+                2. Destination Lists
+              </h2>
+
+              <div className="space-y-4">
+                {/* Create new list */}
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">
+                    Create New List
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      placeholder="List name (e.g., General, Family Sort)"
+                      value={newListName}
+                      onChange={(e) => setNewListName(e.target.value)}
+                      className="flex-1 p-3 bg-slate-700 rounded border border-slate-600 text-white"
+                      onKeyPress={(e) => e.key === "Enter" && createNewList()}
+                    />
+                    <button
+                      onClick={createNewList}
+                      className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded font-semibold transition"
+                    >
+                      Create
+                    </button>
+                  </div>
+                </div>
+
+                {/* Select existing list */}
+                {Object.keys(destinationLists).length > 0 && (
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">
+                      Select List to Use
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {Object.keys(destinationLists).map((listName) => (
+                        <div key={listName} className="flex gap-1">
+                          <button
+                            onClick={() => selectList(listName)}
+                            className={`flex-1 p-3 rounded font-semibold transition ${
+                              selectedListName === listName
+                                ? "bg-blue-600 text-white"
+                                : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+                            }`}
+                          >
+                            {listName}
+                            {destinationLists[listName].length > 0 && (
+                              <span className="text-xs ml-2">
+                                ({destinationLists[listName].length})
+                              </span>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => deleteList(listName)}
+                            className="px-3 bg-red-600 hover:bg-red-700 rounded text-white transition"
+                            title="Delete list"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!selectedListName &&
+                  Object.keys(destinationLists).length > 0 && (
+                    <p className="text-yellow-400 text-sm">
+                      ⚠️ Please select a list to continue
+                    </p>
+                  )}
+              </div>
+            </div>
+
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <FolderPlus size={20} />
+                3. Destination Folders
+                {selectedListName && (
                   <span className="text-sm text-slate-400 ml-auto">
-                    ({destinations.length} saved)
+                    List: {selectedListName} ({destinations.length} folders)
                   </span>
                 )}
               </h2>
@@ -573,6 +721,7 @@ export default function ImageSorter() {
                   value={newDestName}
                   onChange={(e) => setNewDestName(e.target.value)}
                   className="p-3 bg-slate-700 rounded border border-slate-600 text-white"
+                  disabled={!selectedListName}
                 />
                 <input
                   type="text"
@@ -581,6 +730,7 @@ export default function ImageSorter() {
                   onChange={(e) => setNewDestKey(e.target.value)}
                   maxLength={1}
                   className="p-3 bg-slate-700 rounded border border-slate-600 text-white text-center"
+                  disabled={!selectedListName}
                 />
                 <input
                   type="text"
@@ -588,13 +738,15 @@ export default function ImageSorter() {
                   value={newDestPath}
                   onChange={(e) => setNewDestPath(e.target.value)}
                   className="p-3 bg-slate-700 rounded border border-slate-600 text-white"
+                  disabled={!selectedListName}
                 />
               </div>
               <button
                 onClick={addDestination}
-                className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded font-semibold transition"
+                disabled={!selectedListName}
+                className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:opacity-50 rounded font-semibold transition"
               >
-                Add Destination
+                Add Destination to {selectedListName || "Selected List"}
               </button>
 
               {destinations.length > 0 && (
@@ -645,14 +797,24 @@ export default function ImageSorter() {
               )}
             </div>
 
-            {images.length > 0 && destinations.length > 0 && (
-              <button
-                onClick={() => setIsStarted(true)}
-                className="w-full p-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 rounded-lg font-bold text-lg flex items-center justify-center gap-2 transition"
-              >
-                <Play size={24} />
-                Start Sorting
-              </button>
+            {images.length > 0 &&
+              destinations.length > 0 &&
+              selectedListName && (
+                <button
+                  onClick={() => setIsStarted(true)}
+                  className="w-full p-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 rounded-lg font-bold text-lg flex items-center justify-center gap-2 transition"
+                >
+                  <Play size={24} />
+                  Start Sorting with "{selectedListName}"
+                </button>
+              )}
+
+            {images.length > 0 && !selectedListName && (
+              <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 text-center">
+                <p className="font-semibold">
+                  ⚠️ Please select a destination list first
+                </p>
+              </div>
             )}
           </div>
         ) : (
