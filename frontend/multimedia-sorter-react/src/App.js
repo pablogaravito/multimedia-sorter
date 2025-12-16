@@ -95,22 +95,6 @@ export default function ImageSorter() {
       setImages(data);
       showFeedback(`Loaded ${data.length} images`);
 
-      // Load metadata for all images
-      const metadata = {};
-      for (const img of data) {
-        try {
-          const metaResponse = await fetch(
-            `${API_BASE}/media-metadata?path=${encodeURIComponent(img.path)}`
-          );
-          if (metaResponse.ok) {
-            metadata[img.path] = await metaResponse.json();
-          }
-        } catch (e) {
-          console.error("Error loading metadata for", img.name);
-        }
-      }
-      setImageMetadata(metadata);
-
       await loadSession();
     } catch (error) {
       showFeedback("Error loading images: " + error.message, 4000);
@@ -435,6 +419,39 @@ export default function ImageSorter() {
   const currentMetadata = currentImage
     ? imageMetadata[currentImage.path]
     : null;
+
+  console.log("Current image:", currentImage?.name);
+  console.log("Current metadata:", currentMetadata);
+  console.log("All imageMetadata:", imageMetadata);
+
+  useEffect(() => {
+    if (!currentImage || !isStarted) return;
+
+    const loadCurrentMetadata = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/media-metadata?path=${encodeURIComponent(
+            currentImage.path
+          )}`
+        );
+        if (response.ok) {
+          const metadata = await response.json();
+          console.log("Metadata received:", metadata);
+          setImageMetadata((prev) => ({
+            ...prev,
+            [currentImage.path]: metadata,
+          }));
+        }
+      } catch (e) {
+        console.error("Error loading metadata");
+      }
+    };
+
+    // Only load if we don't have it yet
+    if (!imageMetadata[currentImage.path]) {
+      loadCurrentMetadata();
+    }
+  }, [currentImage, isStarted]);
 
   const getButtonSizeClasses = () => {
     switch (buttonSize) {
@@ -939,7 +956,8 @@ export default function ImageSorter() {
                       {currentMetadata && (
                         <p className="text-sm text-slate-500">
                           {formatFileSize(currentMetadata.size)}
-                          {currentMetadata.width > 0 &&
+                          {currentMetadata.width &&
+                            currentMetadata.height &&
                             ` • ${currentMetadata.width} × ${currentMetadata.height}`}
                           {currentMetadata.duration &&
                             ` • ${formatVideoDuration(

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.fasterxml.jackson.databind.type.MapType;
 import com.fasterxml.jackson.databind.type.TypeFactory;
+import com.github.kokorin.jaffree.StreamType;
 import com.github.kokorin.jaffree.ffprobe.FFprobe;
 import com.github.kokorin.jaffree.ffprobe.FFprobeResult;
 import com.github.kokorin.jaffree.ffprobe.Stream;
@@ -113,30 +114,48 @@ public class MultimediaSorterService {
         Float duration = null;
 
         try {
+            System.out.println("Attempting to read video metadata for: " + path);
+
             FFprobeResult result = FFprobe.atPath()
                     .setShowStreams(true)
+                    .setShowFormat(true)  // IMPORTANT: Need to explicitly enable format info
                     .setInput(path)
                     .execute();
 
-            // Get video stream info
-            Stream videoStream = result.getStreams().stream()
-                    .filter(s -> "video".equals(s.getCodecType()))
-                    .findFirst()
-                    .orElse(null);
+            System.out.println("FFprobe execution completed");
+            System.out.println("Number of streams: " + (result.getStreams() != null ? result.getStreams().size() : 0));
 
-            if (videoStream != null) {
-                width = videoStream.getWidth();
-                height = videoStream.getHeight();
+            // Get video stream information
+            if (result.getStreams() != null) {
+                for (Stream stream : result.getStreams()) {
+                    System.out.println("Stream codec type: " + stream.getCodecType());
+                    if (stream.getCodecType() == StreamType.VIDEO) {  // Use enum comparison
+                        width = stream.getWidth();
+                        height = stream.getHeight();
+                        System.out.println("Found video stream: " + width + "x" + height);
+                        break;
+                    }
+                }
             }
 
             // Get duration from format
-            if (result.getFormat() != null && result.getFormat().getDuration() != null) {
-                duration = result.getFormat().getDuration();
+            if (result.getFormat() != null) {
+                System.out.println("Format info available");
+                if (result.getFormat().getDuration() != null) {
+                    duration = result.getFormat().getDuration();
+                    System.out.println("Duration: " + duration + " seconds");
+                } else {
+                    System.out.println("Duration is null in format");
+                }
+            } else {
+                System.out.println("Format is null");
             }
 
+            System.out.println("Final metadata - Width: " + width + ", Height: " + height + ", Duration: " + duration);
+
         } catch (Exception e) {
-            // If FFprobe fails, just return file size
-            System.err.println("Could not read video metadata: " + e.getMessage());
+            System.err.println("Error reading video metadata: " + e.getMessage());
+            e.printStackTrace();
         }
 
         return new MultimediaMetadata(size, width, height, duration, "video");
