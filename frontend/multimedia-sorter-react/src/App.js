@@ -38,6 +38,17 @@ export default function ImageSorter() {
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
   const [isVideoMuted, setIsVideoMuted] = useState(true);
   const [videoRef, setVideoRef] = useState(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState(() => {
+    const saved = localStorage.getItem("videoPlaybackSpeed");
+    return saved ? parseFloat(saved) : 1;
+  });
+  const [videoVolume, setVideoVolume] = useState(() => {
+    const saved = localStorage.getItem("videoVolume");
+    return saved ? parseFloat(saved) : 0.5; // Default to 50% volume
+  });
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [isVideoSeeking, setIsVideoSeeking] = useState(false);
 
   const showFeedback = (msg, duration = 2000) => {
     setFeedback(msg);
@@ -272,12 +283,16 @@ export default function ImageSorter() {
     showFeedback("List deleted");
   };
 
-  const openImageInDefaultApp = () => {
+  const openImageInDefaultApp = async () => {
     if (!currentImage) return;
-    window.open(
-      `${API_BASE}/open-file?path=${encodeURIComponent(currentImage.path)}`,
-      "_blank"
-    );
+    try {
+      await fetch(
+        `${API_BASE}/open-file?path=${encodeURIComponent(currentImage.path)}`
+      );
+      showFeedback("Opened in default app");
+    } catch (error) {
+      showFeedback("Could not open file", 3000);
+    }
   };
 
   const classifyImage = (destName) => {
@@ -292,6 +307,9 @@ export default function ImageSorter() {
     }
     setZoom(1);
     setImagePosition({ x: 0, y: 0 });
+    setPlaybackSpeed(1);
+    setVideoProgress(0);
+    setIsVideoPlaying(true);
   };
 
   const skipImage = () => {
@@ -300,6 +318,9 @@ export default function ImageSorter() {
       showFeedback("Skipped");
       setZoom(1);
       setImagePosition({ x: 0, y: 0 });
+      setPlaybackSpeed(1);
+      setVideoProgress(0);
+      setIsVideoPlaying(true);
     }
   };
 
@@ -308,6 +329,9 @@ export default function ImageSorter() {
       setCurrentIndex(currentIndex - 1);
       setZoom(1);
       setImagePosition({ x: 0, y: 0 });
+      setPlaybackSpeed(1);
+      setVideoProgress(0);
+      setIsVideoPlaying(true);
     }
   };
 
@@ -527,6 +551,61 @@ export default function ImageSorter() {
 
   const formatVideoDuration = (seconds) => {
     if (!seconds) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const handleVideoTimeUpdate = () => {
+    if (videoRef && !isVideoSeeking) {
+      setVideoProgress(videoRef.currentTime);
+    }
+  };
+
+  const handleVideoLoadedMetadata = () => {
+    if (videoRef) {
+      setVideoDuration(videoRef.duration);
+      // Apply saved volume and speed when video loads
+      videoRef.volume = videoVolume;
+      videoRef.playbackRate = playbackSpeed;
+    }
+  };
+
+  const handleProgressBarChange = (e) => {
+    const newTime = parseFloat(e.target.value);
+    setVideoProgress(newTime);
+    if (videoRef) {
+      videoRef.currentTime = newTime;
+    }
+  };
+
+  const handleProgressBarMouseDown = () => {
+    setIsVideoSeeking(true);
+  };
+
+  const handleProgressBarMouseUp = () => {
+    setIsVideoSeeking(false);
+  };
+
+  const changePlaybackSpeed = (speed) => {
+    setPlaybackSpeed(speed);
+    localStorage.setItem("videoPlaybackSpeed", speed.toString());
+    if (videoRef) {
+      videoRef.playbackRate = speed;
+    }
+  };
+
+  const changeVolume = (volume) => {
+    const newVolume = parseFloat(volume);
+    setVideoVolume(newVolume);
+    localStorage.setItem("videoVolume", newVolume.toString());
+    if (videoRef) {
+      videoRef.volume = newVolume;
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
@@ -854,7 +933,7 @@ export default function ImageSorter() {
             {currentImage && (
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
                 {isVideoFile(currentImage.name) ? (
-                  // Video Player
+                  // Enhanced Video Player
                   <div className="space-y-3">
                     <div
                       className="flex justify-center mb-4 overflow-hidden relative bg-slate-900 rounded cursor-pointer"
@@ -871,6 +950,8 @@ export default function ImageSorter() {
                         loop
                         muted={isVideoMuted}
                         style={{ maxWidth: "100%" }}
+                        onTimeUpdate={handleVideoTimeUpdate}
+                        onLoadedMetadata={handleVideoLoadedMetadata}
                       />
                       {!isVideoPlaying && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
@@ -880,36 +961,134 @@ export default function ImageSorter() {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 bg-slate-900 p-3 rounded">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleVideoPlayPause();
-                        }}
-                        className="p-2 hover:bg-slate-700 rounded transition"
-                      >
-                        {isVideoPlaying ? (
-                          <span className="text-white">⏸</span>
-                        ) : (
-                          <span className="text-white">▶</span>
+
+                    {/* Video Controls */}
+                    <div className="bg-slate-900 p-3 rounded space-y-3">
+                      {/* Progress Bar */}
+                      <div className="space-y-1">
+                        <input
+                          type="range"
+                          min="0"
+                          max={videoDuration || 0}
+                          value={videoProgress}
+                          onChange={handleProgressBarChange}
+                          onMouseDown={handleProgressBarMouseDown}
+                          onMouseUp={handleProgressBarMouseUp}
+                          onTouchStart={handleProgressBarMouseDown}
+                          onTouchEnd={handleProgressBarMouseUp}
+                          className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                          style={{
+                            background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${
+                              (videoProgress / videoDuration) * 100
+                            }%, #374151 ${
+                              (videoProgress / videoDuration) * 100
+                            }%, #374151 100%)`,
+                          }}
+                        />
+                        <div className="flex justify-between text-xs text-slate-400">
+                          <span>{formatTime(videoProgress)}</span>
+                          <span>{formatTime(videoDuration)}</span>
+                        </div>
+                      </div>
+
+                      {/* Control Buttons Row */}
+                      <div className="flex items-center gap-3">
+                        {/* Play/Pause */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleVideoPlayPause();
+                          }}
+                          className="p-2 hover:bg-slate-700 rounded transition"
+                          title="Play/Pause"
+                        >
+                          {isVideoPlaying ? (
+                            <span className="text-white text-lg">⏸</span>
+                          ) : (
+                            <span className="text-white text-lg">▶</span>
+                          )}
+                        </button>
+
+                        {/* Mute/Unmute */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleVideoMute();
+                          }}
+                          className="p-2 hover:bg-slate-700 rounded transition"
+                          title="Mute/Unmute"
+                        >
+                          {isVideoMuted ? (
+                            <span className="text-white text-lg">🔇</span>
+                          ) : (
+                            <span className="text-white text-lg">🔊</span>
+                          )}
+                        </button>
+
+                        {/* Volume Slider */}
+                        {!isVideoMuted && (
+                          <div className="flex items-center gap-2 min-w-[120px]">
+                            <span className="text-xs text-slate-400">Vol:</span>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.01"
+                              value={videoVolume}
+                              onChange={(e) => changeVolume(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                              style={{
+                                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${
+                                  videoVolume * 100
+                                }%, #374151 ${
+                                  videoVolume * 100
+                                }%, #374151 100%)`,
+                              }}
+                              title={`Volume: ${Math.round(
+                                videoVolume * 100
+                              )}%`}
+                            />
+                            <span className="text-xs text-slate-400 min-w-[30px]">
+                              {Math.round(videoVolume * 100)}%
+                            </span>
+                          </div>
                         )}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleVideoMute();
-                        }}
-                        className="p-2 hover:bg-slate-700 rounded transition"
-                      >
-                        {isVideoMuted ? (
-                          <span className="text-white">🔇</span>
-                        ) : (
-                          <span className="text-white">🔊</span>
-                        )}
-                      </button>
-                      <div className="flex-1 text-sm text-slate-400">
-                        Video • Looping{" "}
-                        {isVideoMuted ? "• Muted" : "• Sound On"}
+
+                        <div className="flex-1" />
+
+                        {/* Playback Speed Controls */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400 mr-1">
+                            Speed:
+                          </span>
+                          {[0.5, 1, 1.5, 2].map((speed) => (
+                            <button
+                              key={speed}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                changePlaybackSpeed(speed);
+                              }}
+                              className={`px-2 py-1 rounded text-xs font-semibold transition ${
+                                playbackSpeed === speed
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                              }`}
+                              title={`${speed}x speed`}
+                            >
+                              {speed}x
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Status Text */}
+                      <div className="text-xs text-slate-400 text-center">
+                        Video • Looping •{" "}
+                        {isVideoMuted
+                          ? "Muted"
+                          : `Volume ${Math.round(videoVolume * 100)}%`}{" "}
+                        • {playbackSpeed}x Speed
                       </div>
                     </div>
                   </div>
