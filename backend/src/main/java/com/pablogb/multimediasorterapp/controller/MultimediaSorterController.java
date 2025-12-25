@@ -169,4 +169,14 @@ public class MultimediaSorterController {
             return ResponseEntity.badRequest().body("Error: " + e.getMessage());
         }
     }
+
+    @GetMapping("/open-explorer")
+    public ResponseEntity<String> openExplorer(@RequestParam String path) {
+        try {
+            service.openFileInExplorer(path);
+            return ResponseEntity.ok("Explorer opened successfully");
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+        }
+    }
 }

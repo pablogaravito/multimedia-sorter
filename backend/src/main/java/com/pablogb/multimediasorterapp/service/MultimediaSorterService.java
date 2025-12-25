@@ -396,4 +396,32 @@ public class MultimediaSorterService {
 
         Desktop.getDesktop().open(path.toFile());
     }
+
+    public void openFileInExplorer(String filePath) throws IOException {
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path)) {
+            throw new IOException("File not found");
+        }
+
+        String os = System.getProperty("os.name").toLowerCase();
+
+        try {
+            if (os.contains("win")) {
+                // Windows: Use explorer with /select flag to highlight the file
+                Runtime.getRuntime().exec(new String[]{
+                        "explorer.exe", "/select,", path.toAbsolutePath().toString()
+                });
+            } else if (os.contains("mac")) {
+                // macOS: Use open with -R flag to reveal in Finder
+                Runtime.getRuntime().exec(new String[]{
+                        "open", "-R", path.toAbsolutePath().toString()
+                });
+            } else {
+                // Linux: Open the parent directory (most file managers don't support highlighting)
+                Desktop.getDesktop().open(path.getParent().toFile());
+            }
+        } catch (Exception e) {
+            throw new IOException("Could not open explorer: " + e.getMessage());
+        }
+    }
 }
