@@ -307,7 +307,6 @@ export default function ImageSorter() {
     }
     setZoom(1);
     setImagePosition({ x: 0, y: 0 });
-    setPlaybackSpeed(1);
     setVideoProgress(0);
     setIsVideoPlaying(true);
   };
@@ -318,7 +317,6 @@ export default function ImageSorter() {
       showFeedback("Skipped");
       setZoom(1);
       setImagePosition({ x: 0, y: 0 });
-      setPlaybackSpeed(1);
       setVideoProgress(0);
       setIsVideoPlaying(true);
     }
@@ -329,7 +327,6 @@ export default function ImageSorter() {
       setCurrentIndex(currentIndex - 1);
       setZoom(1);
       setImagePosition({ x: 0, y: 0 });
-      setPlaybackSpeed(1);
       setVideoProgress(0);
       setIsVideoPlaying(true);
     }
