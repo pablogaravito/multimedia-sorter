@@ -12,7 +12,7 @@ import {
 
 const API_BASE = "http://localhost:8080/api";
 
-export default function ImageSorter() {
+export default function MultimediaSorter() {
   const [sourcePath, setSourcePath] = useState("");
   const [images, setImages] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -49,6 +49,10 @@ export default function ImageSorter() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [isVideoSeeking, setIsVideoSeeking] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddName, setQuickAddName] = useState("");
+  const [quickAddKey, setQuickAddKey] = useState("");
+  const [quickAddPath, setQuickAddPath] = useState("");
 
   const showFeedback = (msg, duration = 2000) => {
     setFeedback(msg);
@@ -283,7 +287,7 @@ export default function ImageSorter() {
     showFeedback("List deleted");
   };
 
-  const openImageInDefaultApp = async () => {
+  const openInDefaultApp = async () => {
     if (!currentImage) return;
     try {
       await fetch(
@@ -293,6 +297,54 @@ export default function ImageSorter() {
     } catch (error) {
       showFeedback("Could not open file", 3000);
     }
+  };
+
+  const openInExplorer = async () => {
+    if (!currentImage) return;
+    try {
+      await fetch(
+        `${API_BASE}/open-explorer?path=${encodeURIComponent(
+          currentImage.path
+        )}`
+      );
+      showFeedback("Opened in explorer");
+    } catch (error) {
+      showFeedback("Could not open containing dir", 3000);
+    }
+  };
+
+  const quickAddDestination = () => {
+    if (!quickAddName.trim() || !quickAddKey.trim() || !quickAddPath.trim()) {
+      showFeedback("Please fill all fields");
+      return;
+    }
+
+    const key = quickAddKey.toLowerCase();
+    if (destinations.some((d) => d.key === key)) {
+      showFeedback("Key already used");
+      return;
+    }
+
+    const newDests = [
+      ...destinations,
+      { name: quickAddName, key, path: quickAddPath },
+    ];
+    setDestinations(newDests);
+
+    const updatedLists = {
+      ...destinationLists,
+      [selectedListName]: newDests,
+    };
+    setDestinationLists(updatedLists);
+    saveDestinationLists(updatedLists);
+
+    // Clear form and close popup
+    setQuickAddName("");
+    setQuickAddKey("");
+    setQuickAddPath("");
+    setShowQuickAdd(false);
+
+    showFeedback(`Added: ${quickAddName} (${key})`);
   };
 
   const classifyImage = (destName) => {
@@ -362,6 +414,13 @@ export default function ImageSorter() {
         `Continue?`
     );
     if (!confirmed) return;
+
+    //s top video playback if playing
+    if (videoRef && isVideoFile(currentImage?.name)) {
+      videoRef.pause();
+      setIsVideoPlaying(false);
+    }
+
     setProcessing(true);
     try {
       const response = await fetch(`${API_BASE}/sort`, {
@@ -671,10 +730,10 @@ export default function ImageSorter() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-4xl font-bold mb-2 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          Image Sorter Pro
+          Multimedia Sorter Pro
         </h1>
         <p className="text-center text-slate-400 mb-8">
-          Organize recovered images with Java backend + hash verification
+          Organize multimedia safely with hash verification
         </p>
 
         {!isStarted ? (
@@ -1153,15 +1212,23 @@ export default function ImageSorter() {
                     <div
                       className={
                         zoom > 1 && !isVideoFile(currentImage.name)
-                          ? "flex-1 flex justify-end"
-                          : ""
+                          ? "flex-1 flex justify-end gap-2"
+                          : "flex gap-2"
                       }
                     >
                       <button
-                        onClick={openImageInDefaultApp}
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition"
+                        onClick={openInExplorer}
+                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm font-semibold transition"
+                        title="Open folder and highlight file"
                       >
-                        Open in App
+                        Open in Explorer
+                      </button>
+                      <button
+                        onClick={openInDefaultApp}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition"
+                        title="Open file in default application"
+                      >
+                        Open in Default App
                       </button>
                     </div>
                   </div>
@@ -1219,6 +1286,17 @@ export default function ImageSorter() {
                     <span className="text-sm">{dest.name}</span>
                   </button>
                 ))}
+                <button
+                  onClick={() => setShowQuickAdd(true)}
+                  disabled={processing}
+                  className={`${getButtonSizeClasses()} bg-green-600 hover:bg-green-700 disabled:bg-slate-600 rounded-lg font-semibold transition flex flex-col items-center gap-1 border-2 border-green-400 border-dashed`}
+                  title="Add new destination folder"
+                >
+                  <span className={`${getButtonKeyClasses()} font-mono`}>
+                    +
+                  </span>
+                  <span className="text-sm">Add New</span>
+                </button>
               </div>
             </div>
 
@@ -1324,6 +1402,76 @@ export default function ImageSorter() {
           </div>
         )}
       </div>
+
+      {showQuickAdd && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-semibold mb-4">
+              Quick Add Destination
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">
+                  Folder Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Family"
+                  value={quickAddName}
+                  onChange={(e) => setQuickAddName(e.target.value)}
+                  className="w-full p-3 bg-slate-700 rounded border border-slate-600 text-white"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">
+                  Keyboard Key (single character)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., f"
+                  value={quickAddKey}
+                  onChange={(e) => setQuickAddKey(e.target.value)}
+                  maxLength={1}
+                  className="w-full p-3 bg-slate-700 rounded border border-slate-600 text-white text-center"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">
+                  Destination Path
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., C:\Sorted\Family"
+                  value={quickAddPath}
+                  onChange={(e) => setQuickAddPath(e.target.value)}
+                  className="w-full p-3 bg-slate-700 rounded border border-slate-600 text-white"
+                  onKeyPress={(e) => e.key === "Enter" && quickAddDestination()}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowQuickAdd(false);
+                  setQuickAddName("");
+                  setQuickAddKey("");
+                  setQuickAddPath("");
+                }}
+                className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={quickAddDestination}
+                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 rounded font-semibold transition"
+              >
+                Add Destination
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
